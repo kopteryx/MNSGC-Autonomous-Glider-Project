@@ -68,8 +68,8 @@ void setup() {
   }
 
   rtc.begin();
-  rtc.adjust(DateTime(F(__DATE__),F(__TIME__)));
-  //rtc.adjust(DateTime(2024, 7, 23, 13, 16, 0));
+  //rtc.adjust(DateTime(F(__DATE__),F(__TIME__)));
+  //rtc.adjust(DateTime(2024, 7, 23, 14, 50, 0)); // Sets the time of the RTC
 
   // initialize digital pin as an output.
   pinMode(RELAY_PIN, OUTPUT);
@@ -83,7 +83,7 @@ void setup() {
   // myLog.println();
   // myLog.println();
   myLog.print("Started Logging New Data!\n");
-  myLog.print("Date/Time,Pressure(kPa),Temperature(C),Humidity(%), Altitude(m),Relay(on/off)\n");
+  myLog.print("Date/Time,Time(ms),Pressure(kPa),Temperature(C),Humidity(%), Altitude(m),Relay(on/off)\n");
   //Serial.println("SD is sucessufully logging!");
   // myLog.println();
 }
@@ -94,6 +94,9 @@ void loop() {
     // myLog.print(F("Date/Time: "));
     // myLog.println(t);
     data += t;
+    data += ",";
+
+    data += String(millis());
     data += ",";
 
     float pressure = BARO.readPressure();
