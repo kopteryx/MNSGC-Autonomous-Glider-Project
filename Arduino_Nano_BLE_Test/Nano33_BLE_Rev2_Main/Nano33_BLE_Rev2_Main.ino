@@ -12,7 +12,7 @@
 #include <SPI.h>
 #include <Wire.h>
 #include "SparkFun_Qwiic_OpenLog_Arduino_Library.h"
-#define RELAY_PIN  2  // The Arduino Nano pin connected to the IN pin of relay module
+#define RELAY_PIN  2
 #include <string.h>
 
 OpenLog myLog;
@@ -37,8 +37,6 @@ public:
           // myLog.println("Relay is OFF");
           delay(10000);
         }
-
-        // myLog.println();
         return true;
     }
     bool getState() const {
@@ -46,8 +44,8 @@ public:
     }
 };
 
-OneWaySwitch switch1;    // CHANGE TO CORRECT ALTITUDE + SEA LEVEL BEFORE FLIGHT
-float desired_altitude = 100; //Desired altitude in meters: 80,000 ft = 24720
+OneWaySwitch switch1;
+float desired_altitude = 24700; //Desired altitude + sea-level @ Montgomery MN: 81,000 ft = 24700 m
 bool isCut;
 String data = "";
 
@@ -71,7 +69,7 @@ void setup() {
 
   rtc.begin();
   rtc.adjust(DateTime(F(__DATE__),F(__TIME__)));
-  //rtc.adjust(DateTime(2024, 7, 19, 17, 56, 0));
+  //rtc.adjust(DateTime(2024, 7, 23, 13, 16, 0));
 
   // initialize digital pin as an output.
   pinMode(RELAY_PIN, OUTPUT);
@@ -151,6 +149,5 @@ void loop() {
     data = "";
     isCut = false;
 
-    // wait 1 second to print again
     delay(1000);
   } 
