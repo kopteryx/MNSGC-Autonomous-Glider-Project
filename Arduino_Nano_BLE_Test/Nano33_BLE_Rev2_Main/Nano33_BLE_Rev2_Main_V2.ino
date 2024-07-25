@@ -2,7 +2,7 @@
   EDIT TO SPECIFY UAV PROJECT CODE
 
   The circuit:
-  - Arduino Nano 33 BLE Sense Rev 2
+  - Arduino Nano 33 BLE Sense
 */
 
 #include <Arduino_LPS22HB.h>
@@ -48,7 +48,8 @@ OneWaySwitch switch1;
 float desired_altitude = 24700; //Desired altitude + sea-level @ Montgomery MN: 81,000 ft = 24700 m
 bool isCut;
 String data = "";
-
+float old_temp = 0;
+float old_hum = 0;
 void setup() {
   Wire.begin();
   myLog.begin();
@@ -107,9 +108,25 @@ void loop() {
     data += String(pressure);
     data += ",";
 
-    float temperature = BARO.readTemperature();
+    float temperature = HS300x.readTemperature();
     float humidity    = HS300x.readHumidity();
+    if (abs(old_temp - temperature) >= 0.5 || abs(old_hum - humidity) >= 1 )
+      {
+      // print each of the sensor values
+      Serial.print("Temperature = ");
+      Serial.print(temperature);
+      Serial.println(" °C");
 
+      Serial.print("Humidity    = ");
+      Serial.print(humidity);
+      Serial.println(" %");
+
+      // print an empty line
+      Serial.println();
+
+      // wait 1 second to print again
+      delay(1000);
+      }
     // myLog.print("Humidity    = ");
     // myLog.print(humidity);
     // myLog.println(" %");
