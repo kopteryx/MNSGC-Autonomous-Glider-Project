@@ -11,13 +11,17 @@
 #include <SD.h>
 #include <SPI.h>
 #include <Wire.h>
+#include "Thermistor.h"
 #include "SparkFun_Qwiic_OpenLog_Arduino_Library.h"
 #define RELAY_PIN  2
+#define THERM_PIN A3
 #include <string.h>
 
 OpenLog myLog;
+Thermistor hotMan(THERM_PIN);
 RTC_DS3231 rtc;
 char t[32];
+
 
 class OneWaySwitch {
 private:
@@ -48,14 +52,16 @@ OneWaySwitch switch1;
 float desired_altitude = 24700; //Desired altitude + sea-level @ Montgomery MN: 81,000 ft = 24700 m
 bool isCut;
 String data = "";
+
 float old_temp = 0;
 float old_hum = 0;
 void setup() {
   Wire.begin();
   myLog.begin();
   isCut = false;
+  hotMan.begin(10);
   
-  //Serial.begin(9600);
+  Serial.begin(9600);
   //while (!Serial);
 
   if (!BARO.begin()) {
@@ -84,7 +90,7 @@ void setup() {
   // myLog.println();
   // myLog.println();
   myLog.print("Started Logging New Data!\n");
-  myLog.print("Date/Time,Time(ms),Pressure(kPa),Temperature(C),Humidity(%), Altitude(m),Relay(on/off)\n");
+  myLog.print("Date/Time,Time(ms),Pressure(kPa),Temperature(C),Humidity(%), Altitude(m),Relay(on/off)\n"); //  possibly switch humidity and temp
   //Serial.println("SD is sucessufully logging!");
   // myLog.println();
 }
@@ -108,36 +114,41 @@ void loop() {
     data += String(pressure);
     data += ",";
 
+    // float temperature = HS300x.readTemperature();
+    hotMan.update();
+    float temperature2 = hotMan.getTempF();
     float temperature = HS300x.readTemperature();
     float humidity    = HS300x.readHumidity();
-    if (abs(old_temp - temperature) >= 0.5 || abs(old_hum - humidity) >= 1 )
-      {
-      // print each of the sensor values
-      Serial.print("Temperature = ");
-      Serial.print(temperature);
-      Serial.println(" °C");
+    // if (abs(old_temp - temperature) >= 0.5 || abs(old_hum - humidity) >= 1 )
+    //   {
+    //   // print each of the sensor values
+    //   Serial.print("Temperature = ");
+    //   Serial.print(temperature);
+    //   Serial.println(" °C");
 
-      Serial.print("Humidity    = ");
-      Serial.print(humidity);
-      Serial.println(" %");
+    //   Serial.print("Humidity    = ");
+    //   Serial.print(humidity);
+    //   Serial.println(" %");
 
-      // print an empty line
-      Serial.println();
+    //   // print an empty line
+    //   Serial.println();
 
-      // wait 1 second to print again
-      delay(1000);
-      }
-    // myLog.print("Humidity    = ");
-    // myLog.print(humidity);
-    // myLog.println(" %");
-    data += String(humidity);
-    data += ",";
+    //   // wait 1 second to print again
+    //   delay(1000);
+    //   }
 
     // myLog.print("Temperature = ");
     // myLog.print(temperature);
     // myLog.println(" C");
     data += String(temperature);
     data += ",";
+    // myLog.print("Humidity    = ");
+    // myLog.print(humidity);
+    // myLog.println(" %");
+    data += String(humidity);
+    data += ",";
+
+
 
     float altitude = 44330 * ( 1 - pow(pressure/101.325, 1/5.255) );
     
@@ -164,10 +175,18 @@ void loop() {
     data += ",";
     data += "\n";
 
+
+    Serial.println(temperature2);
+    Serial.println(data);
+    
+    
+    
     myLog.print(data);
 
     data = "";
     isCut = false;
+
+    
 
     delay(1000);
   } 

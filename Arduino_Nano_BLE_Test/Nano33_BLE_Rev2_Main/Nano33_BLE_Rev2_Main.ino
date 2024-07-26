@@ -2,7 +2,7 @@
   EDIT TO SPECIFY UAV PROJECT CODE
 
   The circuit:
-  - Arduino Nano 33 BLE Sense Rev 2
+  - Arduino Nano 33 BLE Sense
 */
 
 #include <Arduino_LPS22HB.h>
