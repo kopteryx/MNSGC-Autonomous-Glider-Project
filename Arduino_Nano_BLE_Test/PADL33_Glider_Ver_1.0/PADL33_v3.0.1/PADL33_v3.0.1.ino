@@ -22,7 +22,7 @@
 #include <SFE_MicroOLED.h>
 
 
-
+#include "relay.h"
 #include "OLED.h"
 #include "Thermistor.h"
 #include "LED.h"
@@ -38,11 +38,13 @@ bool ecefEnabled = true; // bool to enable turing off ECEF for debugging
 bool rtkEnabled = false; // bool to enable turing off RTK for debugging -> Must be using D9S Corrections Reciever
 bool gpsI2C = false;      // bool to enable I2C when true, UART when false
 bool usingBuzzer = false; // if this is false, the buzzer will never make a noise. 
-bool usingOLED = true; // if false, OLED screen won't be used and setup will be faster.
+bool usingOLED = false; // if false, OLED screen won't be used and setup will be faster.
 // END VARIABLES TO EDIT FOR CONFIGURATION
 
-String header = "hh:mm:ss,FltTimer,T(s),T(ms),Hz,T2,T3,T4,T5,T6,totT,5v,VIN(V),HtrS,extT(F) or ADC,extT(C),intT(F),intT(C),Fix Type,RTK,PVT,Sats,Date,Time,Lat,Lon,Alt(Ft),Alt(M),HorizAccuracy(MM),VertAccuracy(MM),VertVel(Ft/S),VertVel(M/S),ECEFstat,ECEFX(M),ECEFY(M),ECEFZ(M),NedVelNorth(M/S),NedVelEast(M/S),NedVelDown(M/S),GndSpd(M/S),Head(Deg),PDOP,kPa,ATM,PSI,C,F,Ft,M,VV(Ft),VV(M),G(y),G(x),G(z),Deg/S(x),Deg/S(y),Deg/S(z),uT(x),uT(y),uT(z),kx mG(y),mG(x),mG(z),GPS I2C?,Atomic clock,Cut?," + String(Version);
-
+String header = "hh:mm:ss,FltTimer,T(s),T(ms),Hz,T2,T3,T4,T5,T6,totT,5v,VIN(V),HtrS,extT(F) or ADC,extT(C),intT(F),intT(C),Fix Type,RTK,PVT,Sats,Date,Time,Lat,Lon,Alt(Ft),Alt(M),HorizAccuracy(MM),VertAccuracy(MM),VertVel(Ft/S),VertVel(M/S),ECEFstat,ECEFX(M),ECEFY(M),ECEFZ(M),NedVelNorth(M/S),NedVelEast(M/S),NedVelDown(M/S),GndSpd(M/S),Head(Deg),PDOP,kPa,ATM,PSI,C,F,Ft,M,VV(Ft),VV(M),G(y),G(x),G(z),Deg/S(x),Deg/S(y),Deg/S(z),uT(x),uT(y),uT(z),kx mG(y),mG(x),mG(z),GPS I2C?,Cut?," + String(Version);
+OneWaySwitch switch1;
+float desired_altitude = 20; //Desired altitude + sea-level @ Montgomery MN: 81,000 ft = 24700 m
+bool isCut;
 void setup() { //////////////////////////////////////////// SETUP ////////////////////////////////////////////
     systemSetUp();
     if (usingBuzzer){
@@ -53,6 +55,11 @@ void setup() { //////////////////////////////////////////// SETUP //////////////
 void loop() { ///////////////////////////////////////////// LOOP /////////////////////////////////////////////
 
     if(millis() - timer >= DATA_DELAY){
+      
+      if (imu.data.gyroX >= desired_altitude && !switch1.getState()) {
+        isCut = switch1.turnOn();
+      }
+
         timer = millis();
         updateData();
     }
@@ -269,8 +276,15 @@ void updateData(){
     data += String(kxData[2]);
     data += ",";
     data += String(gpsI2C);
+    data += ",";
+    data += String(isCut);
     data += "\n";
-
+    
+    
+    data = String(imu.data.gyroX);
+    data += ",";
+    data += String(isCut);
+    data += "\n";
     Serial.println(data);
     
     timer5 = millis() - timer7; ///////////// Timer 6 ///////////// 
