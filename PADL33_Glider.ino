@@ -40,16 +40,16 @@ bool usingBuzzer = false; // if this is false, the buzzer will never make a nois
 bool usingOLED = true; // if false, OLED screen won't be used and setup will be faster.
 // END VARIABLES TO EDIT FOR CONFIGURATION
 
-String header = "hh:mm:ss,FltTimer,T(s),T(ms),Hz,T2,T3,T4,T5,T6,totT,5v,VIN(V),HtrS,extT(F) or ADC,extT(C),intT(F),intT(C),Fix Type,RTK,PVT,Sats,Date,Time,Lat,Lon,Alt(Ft),Alt(M),HorizAccuracy(MM),VertAccuracy(MM),VertVel(Ft/S),VertVel(M/S),ECEFstat,ECEFX(M),ECEFY(M),ECEFZ(M),NedVelNorth(M/S),NedVelEast(M/S),NedVelDown(M/S),GndSpd(M/S),Head(Deg),PDOP,kPa,ATM,PSI,C,F,Ft,M,VV(Ft),VV(M),G(y),G(x),G(z),Deg/S(x),Deg/S(y),Deg/S(z),uT(x),uT(y),uT(z),kx mG(y),mG(x),mG(z),GPS I2C?,Cut?,CutTimerStarted?" + String(Version);
+String header = "hh:mm:ss,FltTimer,T(s),T(ms),Hz,T2,T3,T4,T5,T6,totT,5v,VIN(V),HtrS,extT(F) or ADC,extT(C),intT(F),intT(C),Fix Type,RTK,PVT,Sats,Date,Time,Lat,Lon,Alt(Ft),Alt(M),HorizAccuracy(MM),VertAccuracy(MM),VertVel(Ft/S),VertVel(M/S),ECEFstat,ECEFX(M),ECEFY(M),ECEFZ(M),NedVelNorth(M/S),NedVelEast(M/S),NedVelDown(M/S),GndSpd(M/S),Head(Deg),PDOP,kPa,ATM,PSI,C,F,Ft,M,VV(Ft),VV(M),G(y),G(x),G(z),Deg/S(x),Deg/S(y),Deg/S(z),uT(x),uT(y),uT(z),kx mG(y),mG(x),mG(z),GPS I2C?,CutterCondition?,CutTimerStarted?," + String(Version);
 
 OneWaySwitch switch1;
-float desired_altitude = 100; // Desired altitude + sea-level @ Montgomery or Alexandria MN: 80,000 ft = 24384 m
-float desired_pressure_alt = 100; // Desired altitude from which the pressure sensor will read if the GPS fails: 85,000 ft = 25908 m
-const unsigned long  desired_time = 60000UL; // 180000 3 min before cutter will initiate for low alt launch  // Desired time (90 min = 5,400,000 ms) at which the balloon will reach 90,000 ft if the GPS and pressure sensor fails: 90,000 ft = 27432 m
+float desired_altitude = 305; // 1000 ft for "Low Alt" drop = ~305 m
+float desired_pressure_alt = 1000; // Desired altitude from which the pressure sensor will read if the GPS fails: 85,000 ft = 25908 m
+const unsigned long  desired_time = 180000UL; // 180000 3 min before cutter will initiate for low alt launch  // Desired time (90 min = 5,400,000 ms) at which the balloon will reach 90,000 ft if the GPS and pressure sensor fails: 90,000 ft = 27432 m
 
 bool cutTimerStarted = false;     // Becomes true once magnetic connectors separate
 unsigned long t_start_ms = 0; 
-bool isCut;
+int cutCondition = 0;
 bool setupComplete = false;
 bool connected_now = false;     // True means continuity loop is closed/connected
 bool connected_prev = false;    // For edge detection
@@ -59,28 +59,36 @@ unsigned long lastEdgeTime = 0;
 unsigned long lastBlinkMs = 0;
 bool ledOn = false;
 
-#define GLIDER_READY 7          // External LED indicator pin
+#define GLIDER_MAG_TIMER 7          // Magnetic connector for timer initiation pin 
+#define GLIDER_STATE_LED A0           //External LED indicator pin
 
 void setup() { //////////////////////////////////////////// SETUP ////////////////////////////////////////////
     systemSetUp();
-    if (usingBuzzer){
-        startUpJingle();
-    }
+    if (usingBuzzer) { startUpJingle(); }
     
-    pinMode(GLIDER_READY, INPUT_PULLUP);
-    digitalWrite(GLIDER_READY, HIGH);    // LED stays solid until setup is finished
-    connected_now = (digitalRead(GLIDER_READY) == LOW);
-    connected_prev = connected_now;
-    setupComplete = true;           // Marks setup as complete. LED will blink until connectors are separated
+    pinMode(GLIDER_MAG_TIMER, INPUT_PULLUP);
+    pinMode(GLIDER_STATE_LED, OUTPUT);
 
-    //t_start_ms = millis();
+    // "Blink on setup" (simple boot indicator before long setup work)
+    for (int i = 0; i < 20; ++i) {           // ~10 seconds total
+      digitalWrite(GLIDER_STATE_LED, HIGH);
+      delay(250);
+      digitalWrite(GLIDER_STATE_LED, LOW);
+      delay(250);
+    }
+
+    digitalWrite(GLIDER_STATE_LED, HIGH);    // LED stays solid until setup is finished
+    setupComplete = true;                    // Marks setup as complete. LED will stay solid until connectors are separated
+
+    connected_now = (digitalRead(GLIDER_MAG_TIMER) == LOW);
+    connected_prev = connected_now;
+
 } ///////////////////////////////////////////////////////// SETUP ////////////////////////////////////////////
 
 
 void loop() { ///////////////////////////////////////////// LOOP /////////////////////////////////////////////
-
-    bool rawConnected = (digitalRead(GLIDER_READY) == LOW);
     unsigned long now = millis();
+    bool rawConnected = (digitalRead(GLIDER_MAG_TIMER) == LOW);
 
     if (rawConnected != connected_now) {
       if (now - lastEdgeTime >= DEBOUNCE_MS) {
@@ -88,76 +96,42 @@ void loop() { ///////////////////////////////////////////// LOOP ///////////////
         connected_now  = rawConnected;
         lastEdgeTime = now;
 
-        // Edge: CONNECTED -> DISCONNECTED  (start timer)
+        // CONNECTED -> DISCONNECTED : start timer
         if (connected_prev == true && connected_now == false) {
-          if (!cutTimerStarted) {
+          if (!cutTimerStarted) {           
             cutTimerStarted = true;
-            t_start_ms = now;                 // arm/start the drop timer
+            t_start_ms = now;
           }
+          // LED OFF once separated
+          digitalWrite(GLIDER_STATE_LED, LOW);
         }
-        // Edge: DISCONNECTED -> CONNECTED (optional: disarm/reset)
-        // If you want to *reset* the timer when reconnected, uncomment:
+
+        // DISCONNECTED -> CONNECTED : optional timer reset (keep or remove)
         else if (connected_prev == false && connected_now == true) {
-          cutTimerStarted= false;
+          cutTimerStarted = false;
+          // If reconnected after setup, LED back to solid
+          if (setupComplete) digitalWrite(GLIDER_STATE_LED, HIGH);
         }
       }
     }
-
-    if (!setupComplete) {
-      if (connected_now) {             // blink
-          if (now - lastBlinkMs >= BLINK_IVL_MS) {
-            lastBlinkMs = now;
-            ledOn = !ledOn;
-            digitalWrite(GLIDER_READY, ledOn ? HIGH : LOW);
-    } else {
-      digitalWrite(GLIDER_READY, HIGH);  // solid
-        }
-      } else {
-        ledOn = false;  // disconnected -> LED off
-        digitalWrite(GLIDER_READY, LOW);
-      }
-    }
-
-
-    /*
-    // Continuity check for if magnetic connector has disconnected
-    if (digitalRead(GLIDER_READY) == HIGH) {
-      isGliderConnected = false; // HIGH means glider is disconnected
-    } else {
-      isGliderConnected = true; // LOW means it's connected
-    }
-
-    // Calls Relay class to cut glider once at desired altitude
-    if(millis() - timer >= DATA_DELAY){
-      unsigned long elapsed = millis() - t_start_ms;
-      
-      
-      if (gpsAltM >= desired_altitude && !switch1.getState()) {
-        isCut = switch1.turnOn();
-
-      } else if (pressureSensor[6] >= desired_pressure_alt && !switch1.getState()) {
-        isCut = switch1.turnOn();
-      
-      } else if (elapsed >= desired_time && !switch1.getState()) {
-        isCut = switch1.turnOn();
-      }
-
-        timer = millis();
-        updateData();
-    }
-    */
 
     // Cut logic: Calls Relay class to cut glider based on GPS or pressure or timer afterseparation
     if (now - timer >= DATA_DELAY) {
-      /*if (gpsAltM >= desired_altitude && !switch1.getState()) {
-        isCut = switch1.turnOn();
+      cutCondition = 0;
+      if (cutTimerStarted && (gpsAltM >= desired_altitude) && !switch1.getState()) {
+        cutCondition = 1; 
+        switch1.turnOn(); 
+        cutTimerStarted = false; 
 
-      } else if (pressureSensor[6] >= desired_pressure_alt && !switch1.getState()) {
-        isCut = switch1.turnOn();
+      } else if (cutTimerStarted && (pressureSensor[6] >= desired_pressure_alt) && !switch1.getState()) {
+        cutCondition = 2;
+        switch1.turnOn();
+        cutTimerStarted = false; 
 
-      } else*/ if (cutTimerStarted && (now - t_start_ms >= desired_time) && !switch1.getState()) {
-        // separation has occurred and the delay has elapsed
-        isCut = switch1.turnOn();
+      } else if (cutTimerStarted && (now - t_start_ms >= desired_time) && !switch1.getState()) {
+        cutCondition = 3;
+        switch1.turnOn();
+        cutTimerStarted = false; 
       }
 
       timer = now;
@@ -344,8 +318,12 @@ void updateData(){
     data += ",";
     data += String(gpsI2C);
     data += ",";
-    data += String(isCut);
-    data += ",";
+    //data += String(cutterRunning);
+    //data += ",";
+    //if () {
+      data += String(cutCondition);
+      data += ",";    
+    //}
     data += String(cutTimerStarted);
     data += "\n";
     Serial.println(data);
